@@ -39,7 +39,7 @@ def load_data():
         df = pd.read_csv(DATA_FILE)
 
         if df.empty or len(df.columns) == 0:
-            raise ValueError("Empty file")
+            raise ValueError
 
         for col in columns:
             if col not in df.columns:
@@ -47,7 +47,7 @@ def load_data():
 
         return df
 
-    except Exception:
+    except:
         df = pd.DataFrame(columns=columns)
         df.to_csv(DATA_FILE, index=False)
         return df
@@ -57,6 +57,22 @@ def save_data(df):
     df.to_csv(DATA_FILE, index=False)
 
 df = load_data()
+
+# ==============================
+# RESET FLAG SYSTEM
+# ==============================
+if "reset_flag" not in st.session_state:
+    st.session_state.reset_flag = False
+
+def reset_form():
+    st.session_state.reset_flag = True
+
+# ==============================
+# APPLY RESET BEFORE WIDGETS
+# ==============================
+if st.session_state.reset_flag:
+    st.session_state.clear()
+    st.session_state.reset_flag = False
 
 # ==============================
 # DARK UI
@@ -74,19 +90,6 @@ div[data-testid="metric-container"] {
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ==============================
-# RESET FUNCTION
-# ==============================
-def reset_form():
-    keys = [
-        "date", "time", "asset", "direction", "lots",
-        "entry", "sl", "tp", "result",
-        "setup", "strategy", "emotion", "notes"
-    ]
-    for key in keys:
-        st.session_state[key] = "" if isinstance(st.session_state.get(key, ""), str) else 0
-    st.session_state["date"] = date.today()
 
 # ==============================
 # TITLE
@@ -108,46 +111,38 @@ with st.form("trade_form"):
     col1, col2 = st.columns(2)
 
     with col1:
-        date_val = st.date_input("Date", key="date")
-        time = st.text_input("Time (09:30 AM)", key="time")
+        date_val = st.date_input("Date", value=date.today())
+        time = st.text_input("Time (09:30 AM)")
 
-        asset = st.selectbox("Asset", [""] + ASSETS, key="asset")
-        direction = st.selectbox("Direction", ["", "Long", "Short"], key="direction")
-        lots = st.number_input("Lot/s", min_value=0.0, key="lots")
+        asset = st.selectbox("Asset", [""] + ASSETS)
+        direction = st.selectbox("Direction", ["", "Long", "Short"])
+        lots = st.number_input("Lot/s", min_value=0.0)
 
-        entry = st.number_input("Entry", key="entry")
-        sl = st.number_input("Stop Loss", key="sl")
-        tp = st.number_input("Take Profit", key="tp")
+        entry = st.number_input("Entry")
+        sl = st.number_input("Stop Loss")
+        tp = st.number_input("Take Profit")
 
     with col2:
-        result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"], key="result")
+        result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"])
 
-        setup = st.text_input("Setup", key="setup")
-        strategy = st.text_input("Strategy", key="strategy")
-        emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"], key="emotion")
-        notes = st.text_area("Notes", key="notes")
+        setup = st.text_input("Setup")
+        strategy = st.text_input("Strategy")
+        emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"])
+        notes = st.text_area("Notes")
 
     submit = st.form_submit_button("Submit Trade")
 
     if submit:
         errors = []
 
-        if not time:
-            errors.append("Time required")
-        if not asset:
-            errors.append("Asset required")
-        if not direction:
-            errors.append("Direction required")
-        if lots <= 0:
-            errors.append("Lot size required")
-        if entry == 0:
-            errors.append("Entry required")
-        if sl == 0:
-            errors.append("SL required")
-        if tp == 0:
-            errors.append("TP required")
-        if not result:
-            errors.append("Result required")
+        if not time: errors.append("Time required")
+        if not asset: errors.append("Asset required")
+        if not direction: errors.append("Direction required")
+        if lots <= 0: errors.append("Lot size required")
+        if entry == 0: errors.append("Entry required")
+        if sl == 0: errors.append("SL required")
+        if tp == 0: errors.append("TP required")
+        if not result: errors.append("Result required")
 
         if errors:
             for e in errors:
