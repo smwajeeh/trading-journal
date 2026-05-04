@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
 
 st.set_page_config(page_title="Trading Journal", layout="wide")
 
@@ -9,7 +8,7 @@ DATA_FILE = "data.csv"
 ACCOUNTS_FILE = "accounts.csv"
 
 # ==============================
-# CONTRACT VALUES (PER POINT)
+# CONTRACT VALUES
 # ==============================
 CONTRACT_VALUES = {
     "MNQ": 2,
@@ -20,7 +19,7 @@ CONTRACT_VALUES = {
 }
 
 # ==============================
-# LOAD DATA SAFELY
+# LOAD FUNCTIONS
 # ==============================
 def load_csv(file, columns):
     if not os.path.exists(file):
@@ -51,46 +50,78 @@ trade_columns = [
 df = load_csv(DATA_FILE, trade_columns)
 accounts_df = load_csv(ACCOUNTS_FILE, ["Account"])
 
-accounts = accounts_df["Account"].tolist()
+accounts = accounts_df["Account"].dropna().tolist()
 
 # ==============================
-# ACCOUNT MANAGEMENT
+# SIDEBAR - ACCOUNT MANAGEMENT (IMPROVED)
 # ==============================
-st.sidebar.header("⚙️ Account Management")
+st.sidebar.markdown("## 🏦 Accounts")
 
-new_account = st.sidebar.text_input("Add Account")
+with st.sidebar.expander("Manage Accounts", expanded=True):
 
-if st.sidebar.button("Add Account"):
-    if new_account.strip():
-        if new_account not in accounts:
-            accounts_df = pd.concat([accounts_df, pd.DataFrame({"Account": [new_account]})])
-            save_csv(accounts_df, ACCOUNTS_FILE)
-            st.sidebar.success("Account Added")
-            st.rerun()
+    # Add Account
+    st.markdown("### ➕ Add Account")
+    new_account = st.text_input("Account Name", key="add_acc")
+
+    if st.button("Add", use_container_width=True):
+        if new_account.strip():
+            if new_account not in accounts:
+                accounts_df = pd.concat(
+                    [accounts_df, pd.DataFrame({"Account": [new_account.strip()]})],
+                    ignore_index=True
+                )
+                save_csv(accounts_df, ACCOUNTS_FILE)
+                st.success("Account added")
+                st.rerun()
+            else:
+                st.warning("Account already exists")
         else:
-            st.sidebar.warning("Account already exists")
-    else:
-        st.sidebar.error("Enter valid account name")
+            st.error("Enter a valid name")
 
-if accounts:
-    selected_account_manage = st.sidebar.selectbox("Manage Account", accounts)
+    st.divider()
 
-    rename = st.sidebar.text_input("Rename Account")
-    if st.sidebar.button("Rename"):
-        if rename.strip():
-            accounts_df.loc[accounts_df["Account"] == selected_account_manage, "Account"] = rename
-            save_csv(accounts_df, ACCOUNTS_FILE)
-            st.sidebar.success("Renamed")
-            st.rerun()
+    # Rename Account
+    if accounts:
+        st.markdown("### ✏️ Rename Account")
+        selected_account = st.selectbox("Select Account", accounts, key="rename_select")
 
-    if st.sidebar.button("Delete Account"):
-        accounts_df = accounts_df[accounts_df["Account"] != selected_account_manage]
-        save_csv(accounts_df, ACCOUNTS_FILE)
-        st.sidebar.warning("Deleted")
-        st.rerun()
+        new_name = st.text_input("New Name", key="rename_input")
+
+        if st.button("Rename", use_container_width=True):
+            if new_name.strip():
+                if new_name not in accounts:
+                    accounts_df.loc[
+                        accounts_df["Account"] == selected_account, "Account"
+                    ] = new_name.strip()
+                    save_csv(accounts_df, ACCOUNTS_FILE)
+                    st.success("Renamed successfully")
+                    st.rerun()
+                else:
+                    st.warning("Name already exists")
+            else:
+                st.error("Enter a valid name")
+
+        st.divider()
+
+        # Delete Account
+        st.markdown("### 🗑️ Delete Account")
+        delete_account = st.selectbox("Select to Delete", accounts, key="delete_select")
+
+        confirm_delete = st.checkbox("Confirm deletion")
+
+        if st.button("Delete", use_container_width=True):
+            if confirm_delete:
+                accounts_df = accounts_df[
+                    accounts_df["Account"] != delete_account
+                ]
+                save_csv(accounts_df, ACCOUNTS_FILE)
+                st.success("Deleted successfully")
+                st.rerun()
+            else:
+                st.error("Please confirm deletion")
 
 # ==============================
-# MAIN UI
+# MAIN APP
 # ==============================
 st.title("📊 Trading Journal")
 
@@ -138,8 +169,6 @@ with st.form("trade_form"):
     if submit:
         errors = []
 
-        if not date:
-            errors.append("Date required")
         if not time.strip():
             errors.append("Time required")
         if account == "":
@@ -166,17 +195,13 @@ with st.form("trade_form"):
                 st.error(e)
         else:
             try:
-                # ==============================
-                # CALCULATIONS
-                # ==============================
                 risk = abs(entry - sl)
                 reward = abs(tp - entry)
                 rr = round(reward / risk, 2) if risk != 0 else 0
 
-                asset_key = asset.upper()
-                point_value = CONTRACT_VALUES.get(asset_key, 1)
+                point_value = CONTRACT_VALUES.get(asset.upper(), 1)
 
-                pnl_points = (exit_price - entry)
+                pnl_points = exit_price - entry
                 if result == "Loss":
                     pnl_points = -abs(pnl_points)
                 elif result == "Win":
