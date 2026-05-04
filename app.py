@@ -2,83 +2,77 @@ import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Trading Journal", layout="wide")
+st.set_page_config(page_title="Trading Journal Pro", layout="wide")
+
+# ==============================
+# 🎨 CUSTOM DARK THEME (TradeZella Inspired)
+# ==============================
+st.markdown("""
+<style>
+body {background-color: #0e1117;}
+.stApp {background-color: #0e1117; color: #e6edf3;}
+h1, h2, h3 {color: #58a6ff;}
+div[data-testid="metric-container"] {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    padding: 10px;
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 DATA_FILE = "data.csv"
 
-# ==============================
-# CONTRACT VALUES (PER POINT)
-# ==============================
 CONTRACT_VALUES = {
-    "MNQ": 2,
-    "NQ": 20,
-    "US100": 1,
-    "ES": 50,
-    "MES": 5,
-    "USOIL": 100,
-    "CL": 1000,
-    "MCL": 100,
-    "XAUUSD": 100,
-    "GC": 100
+    "MNQ": 2, "NQ": 20, "ES": 50, "MES": 5,
+    "USOIL": 100, "CL": 1000, "MCL": 100,
+    "XAUUSD": 100, "GC": 100
 }
 
 ASSETS = list(CONTRACT_VALUES.keys())
 
 # ==============================
-# LOAD FUNCTIONS
+# LOAD / SAVE
 # ==============================
-def load_csv(file, columns):
-    if not os.path.exists(file):
-        df = pd.DataFrame(columns=columns)
-        df.to_csv(file, index=False)
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        df = pd.DataFrame(columns=[
+            "Trade#", "Date", "Time", "Asset", "Direction", "Lots",
+            "Entry", "SL", "TP",
+            "Risk ($)", "Reward ($)", "RR",
+            "Result", "P&L ($)",
+            "Setup", "Strategy", "Emotion", "Notes"
+        ])
+        df.to_csv(DATA_FILE, index=False)
         return df
-    try:
-        df = pd.read_csv(file)
-        if df.empty:
-            return pd.DataFrame(columns=columns)
-        return df
-    except:
-        return pd.DataFrame(columns=columns)
+    return pd.read_csv(DATA_FILE)
 
-def save_csv(df, file):
-    df.to_csv(file, index=False)
+def save_data(df):
+    df.to_csv(DATA_FILE, index=False)
 
-# ==============================
-# LOAD DATA
-# ==============================
-trade_columns = [
-    "Trade#", "Date", "Time", "Asset", "Direction", "Lots",
-    "Entry", "SL", "TP",
-    "Risk ($)", "Reward ($)", "RR",
-    "Result", "P&L ($)",
-    "Setup", "Strategy", "Emotion", "Notes", "Lesson"
-]
-
-df = load_csv(DATA_FILE, trade_columns)
+df = load_data()
 
 # ==============================
 # TITLE
 # ==============================
-st.title("📊 Trading Journal")
+st.title("📊 Trading Journal Pro")
 
 # ==============================
-# RESET BUTTON
+# RESET
 # ==============================
-if st.button("➕ Add New Trade"):
+if st.button("➕ New Trade"):
     st.session_state.clear()
     st.rerun()
 
 # ==============================
-# TRADE FORM
+# FORM
 # ==============================
 with st.form("trade_form"):
-
     col1, col2 = st.columns(2)
 
     with col1:
         date = st.date_input("Date")
-        time = st.text_input("Time (e.g. 09:30 AM)")
-
+        time = st.text_input("Time (09:30 AM)")
         asset = st.selectbox("Asset", [""] + ASSETS)
         direction = st.selectbox("Direction", ["", "Long", "Short"])
         lots = st.number_input("Lot/s", min_value=0.0)
@@ -89,129 +83,123 @@ with st.form("trade_form"):
 
     with col2:
         result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"])
-
-        setup = st.text_input("Setup")
+        setup = st.text_input("Setup (Playbook)")
         strategy = st.text_input("Strategy")
         emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"])
-
         notes = st.text_area("Notes")
-        lesson = st.text_area("Lesson")
 
     submit = st.form_submit_button("Submit Trade")
 
-    # ==============================
-    # VALIDATION
-    # ==============================
     if submit:
         errors = []
 
-        if not time.strip():
-            errors.append("Time required")
-        if asset == "":
-            errors.append("Asset required")
-        if direction == "":
-            errors.append("Direction required")
-        if lots <= 0:
-            errors.append("Lot size required")
-        if entry == 0:
-            errors.append("Entry required")
-        if sl == 0:
-            errors.append("SL required")
-        if tp == 0:
-            errors.append("TP required")
-        if result == "":
-            errors.append("Result required")
+        if not time: errors.append("Time required")
+        if not asset: errors.append("Asset required")
+        if not direction: errors.append("Direction required")
+        if lots <= 0: errors.append("Lot size required")
+        if entry == 0: errors.append("Entry required")
+        if sl == 0: errors.append("SL required")
+        if tp == 0: errors.append("TP required")
+        if not result: errors.append("Result required")
 
         if errors:
             for e in errors:
                 st.error(e)
         else:
-            try:
-                point_value = CONTRACT_VALUES.get(asset, 1)
+            point = CONTRACT_VALUES.get(asset, 1)
 
-                # ==============================
-                # RESULT-BASED P&L
-                # ==============================
-                if result == "Win":
-                    if direction == "Long":
-                        pnl = (tp - entry) * point_value * lots
-                    else:
-                        pnl = (entry - tp) * point_value * lots
+            if result == "Win":
+                pnl = (tp - entry) * point * lots if direction == "Long" else (entry - tp) * point * lots
+            elif result == "Loss":
+                pnl = (sl - entry) * point * lots if direction == "Long" else (entry - sl) * point * lots
+            else:
+                pnl = 0
 
-                elif result == "Loss":
-                    if direction == "Long":
-                        pnl = (sl - entry) * point_value * lots
-                    else:
-                        pnl = (entry - sl) * point_value * lots
+            risk = abs(entry - sl)
+            reward = abs(tp - entry)
+            rr = round(reward / risk, 2) if risk else 0
 
-                else:  # Break Even
-                    pnl = 0
+            new_row = pd.DataFrame([{
+                "Trade#": len(df) + 1,
+                "Date": date,
+                "Time": time,
+                "Asset": asset,
+                "Direction": direction,
+                "Lots": lots,
+                "Entry": entry,
+                "SL": sl,
+                "TP": tp,
+                "Risk ($)": risk,
+                "Reward ($)": reward,
+                "RR": rr,
+                "Result": result,
+                "P&L ($)": pnl,
+                "Setup": setup,
+                "Strategy": strategy,
+                "Emotion": emotion,
+                "Notes": notes
+            }])
 
-                risk = abs(entry - sl)
-                reward = abs(tp - entry)
-                rr = round(reward / risk, 2) if risk != 0 else 0
+            df = pd.concat([df, new_row], ignore_index=True)
+            save_data(df)
 
-                trade_num = len(df) + 1
-
-                new_row = pd.DataFrame([{
-                    "Trade#": trade_num,
-                    "Date": date,
-                    "Time": time,
-                    "Asset": asset,
-                    "Direction": direction,
-                    "Lots": lots,
-                    "Entry": entry,
-                    "SL": sl,
-                    "TP": tp,
-                    "Risk ($)": risk,
-                    "Reward ($)": reward,
-                    "RR": rr,
-                    "Result": result,
-                    "P&L ($)": pnl,
-                    "Setup": setup,
-                    "Strategy": strategy,
-                    "Emotion": emotion,
-                    "Notes": notes,
-                    "Lesson": lesson
-                }])
-
-                df = pd.concat([df, new_row], ignore_index=True)
-                save_csv(df, DATA_FILE)
-
-                st.success(f"✅ Trade Saved ({result})")
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+            st.success("Trade Added")
+            st.rerun()
 
 # ==============================
-# DASHBOARD
+# 📊 DASHBOARD
 # ==============================
-st.subheader("📊 Dashboard")
+st.subheader("📊 Performance Dashboard")
 
 if not df.empty:
     df["P&L ($)"] = pd.to_numeric(df["P&L ($)"], errors="coerce").fillna(0)
 
     total = len(df)
-    wins = len(df[df["Result"] == "Win"])
-    losses = len(df[df["Result"] == "Loss"])
-    win_rate = (wins / total * 100) if total else 0
+    wins = df[df["Result"] == "Win"]
+    losses = df[df["Result"] == "Loss"]
+
+    win_rate = len(wins) / total * 100
     profit = df["P&L ($)"].sum()
 
-    col1, col2, col3, col4 = st.columns(4)
+    avg_win = wins["P&L ($)"].mean() if not wins.empty else 0
+    avg_loss = losses["P&L ($)"].mean() if not losses.empty else 0
+
+    profit_factor = abs(wins["P&L ($)"].sum() / losses["P&L ($)"].sum()) if not losses.empty else 0
+
+    expectancy = (win_rate/100 * avg_win) + ((1 - win_rate/100) * avg_loss)
+
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Trades", total)
-    col2.metric("Win Rate", f"{win_rate:.2f}%")
+    col2.metric("Win Rate", f"{win_rate:.1f}%")
     col3.metric("Net Profit", f"${profit:.2f}")
-    col4.metric("Wins/Losses", f"{wins}/{losses}")
+    col4.metric("Profit Factor", f"{profit_factor:.2f}")
+    col5.metric("Expectancy", f"${expectancy:.2f}")
 
-    st.subheader("Equity Curve")
-    df["Cumulative"] = df["P&L ($)"].cumsum()
-    st.line_chart(df["Cumulative"])
+    # Equity Curve
+    st.subheader("📈 Equity Curve")
+    df["Equity"] = df["P&L ($)"].cumsum()
+    st.line_chart(df["Equity"])
 
-    st.subheader("By Asset")
+    # Drawdown
+    df["Peak"] = df["Equity"].cummax()
+    df["Drawdown"] = df["Equity"] - df["Peak"]
+    st.subheader("📉 Drawdown")
+    st.line_chart(df["Drawdown"])
+
+    # Playbook (Setup Performance)
+    st.subheader("🧠 Setup Performance")
+    st.bar_chart(df.groupby("Setup")["P&L ($)"].sum())
+
+    # Emotion Analysis
+    st.subheader("🧠 Emotion Impact")
+    st.bar_chart(df.groupby("Emotion")["P&L ($)"].sum())
+
+    # Asset Performance
+    st.subheader("📊 Asset Performance")
     st.bar_chart(df.groupby("Asset")["P&L ($)"].sum())
 
-    st.subheader("Trade History")
+    # Table
+    st.subheader("📋 Trade History")
     st.dataframe(df, use_container_width=True)
 
 else:
