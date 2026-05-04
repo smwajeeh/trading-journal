@@ -5,7 +5,6 @@ import os
 st.set_page_config(page_title="Trading Journal", layout="wide")
 
 DATA_FILE = "data.csv"
-ACCOUNTS_FILE = "accounts.csv"
 
 # ==============================
 # CONTRACT VALUES (PER POINT)
@@ -48,7 +47,7 @@ def save_csv(df, file):
 # LOAD DATA
 # ==============================
 trade_columns = [
-    "Trade#", "Date", "Time", "Account", "Asset", "Direction", "Lots",
+    "Trade#", "Date", "Time", "Asset", "Direction", "Lots",
     "Entry", "SL", "TP",
     "Risk ($)", "Reward ($)", "RR",
     "Result", "P&L ($)",
@@ -56,60 +55,11 @@ trade_columns = [
 ]
 
 df = load_csv(DATA_FILE, trade_columns)
-accounts_df = load_csv(ACCOUNTS_FILE, ["Account"])
-accounts = accounts_df["Account"].dropna().tolist()
 
 # ==============================
 # TITLE
 # ==============================
 st.title("📊 Trading Journal")
-
-# ==============================
-# ACCOUNT MANAGEMENT (INLINE)
-# ==============================
-st.subheader("🏦 Account")
-
-col1, col2, col3 = st.columns([2, 1, 1])
-
-with col1:
-    account = st.selectbox("Select Account", [""] + accounts, key="account_select")
-
-with col2:
-    new_account = st.text_input("Add Account", key="add_account")
-
-    if st.button("Add"):
-        if new_account.strip():
-            if new_account not in accounts:
-                accounts_df = pd.concat(
-                    [accounts_df, pd.DataFrame({"Account": [new_account.strip()]})],
-                    ignore_index=True
-                )
-                save_csv(accounts_df, ACCOUNTS_FILE)
-                st.success("Added")
-                st.rerun()
-            else:
-                st.warning("Exists")
-
-with col3:
-    if account:
-        if st.button("Delete"):
-            accounts_df = accounts_df[accounts_df["Account"] != account]
-            save_csv(accounts_df, ACCOUNTS_FILE)
-            st.warning("Deleted")
-            st.rerun()
-
-# Rename inline
-if account:
-    new_name = st.text_input("Rename Account")
-
-    if st.button("Rename"):
-        if new_name.strip() and new_name not in accounts:
-            accounts_df.loc[
-                accounts_df["Account"] == account, "Account"
-            ] = new_name.strip()
-            save_csv(accounts_df, ACCOUNTS_FILE)
-            st.success("Renamed")
-            st.rerun()
 
 # ==============================
 # RESET BUTTON
@@ -138,6 +88,8 @@ with st.form("trade_form"):
         tp = st.number_input("Take Profit")
 
     with col2:
+        result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"])
+
         setup = st.text_input("Setup")
         strategy = st.text_input("Strategy")
         emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"])
@@ -155,8 +107,6 @@ with st.form("trade_form"):
 
         if not time.strip():
             errors.append("Time required")
-        if account == "":
-            errors.append("Account required")
         if asset == "":
             errors.append("Asset required")
         if direction == "":
@@ -169,6 +119,8 @@ with st.form("trade_form"):
             errors.append("SL required")
         if tp == 0:
             errors.append("TP required")
+        if result == "":
+            errors.append("Result required")
 
         if errors:
             for e in errors:
@@ -178,29 +130,22 @@ with st.form("trade_form"):
                 point_value = CONTRACT_VALUES.get(asset, 1)
 
                 # ==============================
-                # RESULT LOGIC
+                # RESULT-BASED P&L
                 # ==============================
-                if direction == "Long":
-                    if tp > entry:
-                        result = "Win"
-                    elif sl < entry:
-                        result = "Loss"
+                if result == "Win":
+                    if direction == "Long":
+                        pnl = (tp - entry) * point_value * lots
                     else:
-                        result = "BE"
+                        pnl = (entry - tp) * point_value * lots
 
-                    pnl = (tp - entry) * point_value * lots if result == "Win" else \
-                          (sl - entry) * point_value * lots if result == "Loss" else 0
-
-                else:  # Short
-                    if tp < entry:
-                        result = "Win"
-                    elif sl > entry:
-                        result = "Loss"
+                elif result == "Loss":
+                    if direction == "Long":
+                        pnl = (sl - entry) * point_value * lots
                     else:
-                        result = "BE"
+                        pnl = (entry - sl) * point_value * lots
 
-                    pnl = (entry - tp) * point_value * lots if result == "Win" else \
-                          (entry - sl) * point_value * lots if result == "Loss" else 0
+                else:  # Break Even
+                    pnl = 0
 
                 risk = abs(entry - sl)
                 reward = abs(tp - entry)
@@ -212,7 +157,6 @@ with st.form("trade_form"):
                     "Trade#": trade_num,
                     "Date": date,
                     "Time": time,
-                    "Account": account,
                     "Asset": asset,
                     "Direction": direction,
                     "Lots": lots,
@@ -266,9 +210,6 @@ if not df.empty:
 
     st.subheader("By Asset")
     st.bar_chart(df.groupby("Asset")["P&L ($)"].sum())
-
-    st.subheader("By Account")
-    st.bar_chart(df.groupby("Account")["P&L ($)"].sum())
 
     st.subheader("Trade History")
     st.dataframe(df, use_container_width=True)
