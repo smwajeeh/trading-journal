@@ -12,11 +12,18 @@ ACCOUNTS_FILE = "accounts.csv"
 # ==============================
 CONTRACT_VALUES = {
     "MNQ": 2,
+    "NQ": 20,
     "US100": 1,
+    "ES": 50,
+    "MES": 5,
     "USOIL": 100,
+    "CL": 1000,
     "MCL": 100,
-    "XAUUSD": 100
+    "XAUUSD": 100,
+    "GC": 100
 }
+
+ASSETS = list(CONTRACT_VALUES.keys())
 
 # ==============================
 # LOAD FUNCTIONS
@@ -41,10 +48,11 @@ def save_csv(df, file):
 # LOAD DATA
 # ==============================
 trade_columns = [
-    "Trade#", "Date", "Time", "Account", "Asset", "Lots",
-    "Setup", "Strategy", "Entry", "Exit", "SL", "TP",
+    "Trade#", "Date", "Time", "Account", "Asset", "Direction", "Lots",
+    "Entry", "SL", "TP",
     "Risk ($)", "Reward ($)", "RR",
-    "Result", "P&L ($)", "Emotion", "Notes", "Lesson"
+    "Result", "P&L ($)",
+    "Setup", "Strategy", "Emotion", "Notes", "Lesson"
 ]
 
 df = load_csv(DATA_FILE, trade_columns)
@@ -52,17 +60,24 @@ accounts_df = load_csv(ACCOUNTS_FILE, ["Account"])
 accounts = accounts_df["Account"].dropna().tolist()
 
 # ==============================
-# SIDEBAR - ACCOUNT MANAGEMENT (COMPACT)
+# TITLE
 # ==============================
-st.sidebar.markdown("## 🏦 Accounts")
+st.title("📊 Trading Journal")
 
-with st.sidebar.expander("Manage Accounts", expanded=True):
+# ==============================
+# ACCOUNT MANAGEMENT (INLINE)
+# ==============================
+st.subheader("🏦 Account")
 
-    # ➕ Add Account
-    st.markdown("### ➕ Add Account")
-    new_account = st.text_input("Account Name", key="add_acc")
+col1, col2, col3 = st.columns([2, 1, 1])
 
-    if st.button("Add Account", use_container_width=True):
+with col1:
+    account = st.selectbox("Select Account", [""] + accounts, key="account_select")
+
+with col2:
+    new_account = st.text_input("Add Account", key="add_account")
+
+    if st.button("Add"):
         if new_account.strip():
             if new_account not in accounts:
                 accounts_df = pd.concat(
@@ -70,62 +85,35 @@ with st.sidebar.expander("Manage Accounts", expanded=True):
                     ignore_index=True
                 )
                 save_csv(accounts_df, ACCOUNTS_FILE)
-                st.success("Account added")
+                st.success("Added")
                 st.rerun()
             else:
-                st.warning("Account already exists")
-        else:
-            st.error("Enter a valid name")
+                st.warning("Exists")
 
-    st.divider()
+with col3:
+    if account:
+        if st.button("Delete"):
+            accounts_df = accounts_df[accounts_df["Account"] != account]
+            save_csv(accounts_df, ACCOUNTS_FILE)
+            st.warning("Deleted")
+            st.rerun()
 
-    # ✏️ Rename + 🗑️ Delete (COMBINED)
-    if accounts:
-        st.markdown("### ⚙️ Manage Account")
+# Rename inline
+if account:
+    new_name = st.text_input("Rename Account")
 
-        selected_account = st.selectbox("Select Account", accounts, key="manage_acc")
-
-        col1, col2 = st.columns(2)
-
-        # Rename
-        with col1:
-            new_name = st.text_input("New Name", key="rename_input")
-
-            if st.button("Rename", use_container_width=True):
-                if new_name.strip():
-                    if new_name not in accounts:
-                        accounts_df.loc[
-                            accounts_df["Account"] == selected_account, "Account"
-                        ] = new_name.strip()
-                        save_csv(accounts_df, ACCOUNTS_FILE)
-                        st.success("Renamed")
-                        st.rerun()
-                    else:
-                        st.warning("Name exists")
-                else:
-                    st.error("Enter valid name")
-
-        # Delete
-        with col2:
-            confirm_delete = st.checkbox("Confirm Delete")
-
-            if st.button("Delete", use_container_width=True):
-                if confirm_delete:
-                    accounts_df = accounts_df[
-                        accounts_df["Account"] != selected_account
-                    ]
-                    save_csv(accounts_df, ACCOUNTS_FILE)
-                    st.warning("Deleted")
-                    st.rerun()
-                else:
-                    st.error("Confirm deletion first")
+    if st.button("Rename"):
+        if new_name.strip() and new_name not in accounts:
+            accounts_df.loc[
+                accounts_df["Account"] == account, "Account"
+            ] = new_name.strip()
+            save_csv(accounts_df, ACCOUNTS_FILE)
+            st.success("Renamed")
+            st.rerun()
 
 # ==============================
-# MAIN APP
-# ==============================
-st.title("📊 Trading Journal")
-
 # RESET BUTTON
+# ==============================
 if st.button("➕ Add New Trade"):
     st.session_state.clear()
     st.rerun()
@@ -141,21 +129,17 @@ with st.form("trade_form"):
         date = st.date_input("Date")
         time = st.text_input("Time (e.g. 09:30 AM)")
 
-        account = st.selectbox("Account", [""] + accounts)
-        asset = st.text_input("Asset (e.g. MNQ, USOIL)")
+        asset = st.selectbox("Asset", [""] + ASSETS)
+        direction = st.selectbox("Direction", ["", "Long", "Short"])
         lots = st.number_input("Lot/s", min_value=0.0)
 
         entry = st.number_input("Entry")
-        exit_price = st.number_input("Exit")
-
         sl = st.number_input("Stop Loss")
         tp = st.number_input("Take Profit")
 
     with col2:
         setup = st.text_input("Setup")
         strategy = st.text_input("Strategy")
-
-        result = st.selectbox("Result", ["", "Win", "Loss", "BE"])
         emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"])
 
         notes = st.text_area("Notes")
@@ -173,42 +157,54 @@ with st.form("trade_form"):
             errors.append("Time required")
         if account == "":
             errors.append("Account required")
-        if not asset.strip():
+        if asset == "":
             errors.append("Asset required")
+        if direction == "":
+            errors.append("Direction required")
         if lots <= 0:
             errors.append("Lot size required")
         if entry == 0:
             errors.append("Entry required")
-        if exit_price == 0:
-            errors.append("Exit required")
         if sl == 0:
             errors.append("SL required")
         if tp == 0:
             errors.append("TP required")
-        if result == "":
-            errors.append("Result required")
-        if emotion == "":
-            errors.append("Emotion required")
 
         if errors:
             for e in errors:
                 st.error(e)
         else:
             try:
-                # Calculations
+                point_value = CONTRACT_VALUES.get(asset, 1)
+
+                # ==============================
+                # RESULT LOGIC
+                # ==============================
+                if direction == "Long":
+                    if tp > entry:
+                        result = "Win"
+                    elif sl < entry:
+                        result = "Loss"
+                    else:
+                        result = "BE"
+
+                    pnl = (tp - entry) * point_value * lots if result == "Win" else \
+                          (sl - entry) * point_value * lots if result == "Loss" else 0
+
+                else:  # Short
+                    if tp < entry:
+                        result = "Win"
+                    elif sl > entry:
+                        result = "Loss"
+                    else:
+                        result = "BE"
+
+                    pnl = (entry - tp) * point_value * lots if result == "Win" else \
+                          (entry - sl) * point_value * lots if result == "Loss" else 0
+
                 risk = abs(entry - sl)
                 reward = abs(tp - entry)
                 rr = round(reward / risk, 2) if risk != 0 else 0
-
-                point_value = CONTRACT_VALUES.get(asset.upper(), 1)
-
-                pnl_points = exit_price - entry
-                if result == "Loss":
-                    pnl_points = -abs(pnl_points)
-                elif result == "Win":
-                    pnl_points = abs(pnl_points)
-
-                pnl = pnl_points * point_value * lots
 
                 trade_num = len(df) + 1
 
@@ -218,11 +214,9 @@ with st.form("trade_form"):
                     "Time": time,
                     "Account": account,
                     "Asset": asset,
+                    "Direction": direction,
                     "Lots": lots,
-                    "Setup": setup,
-                    "Strategy": strategy,
                     "Entry": entry,
-                    "Exit": exit_price,
                     "SL": sl,
                     "TP": tp,
                     "Risk ($)": risk,
@@ -230,6 +224,8 @@ with st.form("trade_form"):
                     "RR": rr,
                     "Result": result,
                     "P&L ($)": pnl,
+                    "Setup": setup,
+                    "Strategy": strategy,
                     "Emotion": emotion,
                     "Notes": notes,
                     "Lesson": lesson
@@ -238,7 +234,7 @@ with st.form("trade_form"):
                 df = pd.concat([df, new_row], ignore_index=True)
                 save_csv(df, DATA_FILE)
 
-                st.success("✅ Trade Saved")
+                st.success(f"✅ Trade Saved ({result})")
                 st.rerun()
 
             except Exception as e:
