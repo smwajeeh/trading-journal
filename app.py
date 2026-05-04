@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from datetime import date
 
 st.set_page_config(page_title="Trading Journal Pro", layout="wide")
 
@@ -18,7 +19,7 @@ CONTRACT_VALUES = {
 ASSETS = list(CONTRACT_VALUES.keys())
 
 # ==============================
-# SAFE DATA LOADER (FIXED)
+# SAFE DATA LOADER
 # ==============================
 def load_data():
     columns = [
@@ -40,7 +41,6 @@ def load_data():
         if df.empty or len(df.columns) == 0:
             raise ValueError("Empty file")
 
-        # Ensure all columns exist
         for col in columns:
             if col not in df.columns:
                 df[col] = None
@@ -76,6 +76,19 @@ div[data-testid="metric-container"] {
 """, unsafe_allow_html=True)
 
 # ==============================
+# RESET FUNCTION
+# ==============================
+def reset_form():
+    keys = [
+        "date", "time", "asset", "direction", "lots",
+        "entry", "sl", "tp", "result",
+        "setup", "strategy", "emotion", "notes"
+    ]
+    for key in keys:
+        st.session_state[key] = "" if isinstance(st.session_state.get(key, ""), str) else 0
+    st.session_state["date"] = date.today()
+
+# ==============================
 # TITLE
 # ==============================
 st.title("📊 Trading Journal Pro")
@@ -84,46 +97,57 @@ st.title("📊 Trading Journal Pro")
 # RESET BUTTON
 # ==============================
 if st.button("➕ New Trade"):
-    st.session_state.clear()
+    reset_form()
     st.rerun()
 
 # ==============================
 # FORM
 # ==============================
 with st.form("trade_form"):
+
     col1, col2 = st.columns(2)
 
     with col1:
-        date = st.date_input("Date")
-        time = st.text_input("Time (09:30 AM)")
-        asset = st.selectbox("Asset", [""] + ASSETS)
-        direction = st.selectbox("Direction", ["", "Long", "Short"])
-        lots = st.number_input("Lot/s", min_value=0.0)
+        date_val = st.date_input("Date", key="date")
+        time = st.text_input("Time (09:30 AM)", key="time")
 
-        entry = st.number_input("Entry")
-        sl = st.number_input("Stop Loss")
-        tp = st.number_input("Take Profit")
+        asset = st.selectbox("Asset", [""] + ASSETS, key="asset")
+        direction = st.selectbox("Direction", ["", "Long", "Short"], key="direction")
+        lots = st.number_input("Lot/s", min_value=0.0, key="lots")
+
+        entry = st.number_input("Entry", key="entry")
+        sl = st.number_input("Stop Loss", key="sl")
+        tp = st.number_input("Take Profit", key="tp")
 
     with col2:
-        result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"])
-        setup = st.text_input("Setup")
-        strategy = st.text_input("Strategy")
-        emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"])
-        notes = st.text_area("Notes")
+        result = st.selectbox("Result", ["", "Win", "Loss", "Break Even"], key="result")
+
+        setup = st.text_input("Setup", key="setup")
+        strategy = st.text_input("Strategy", key="strategy")
+        emotion = st.selectbox("Emotion", ["", "Calm", "FOMO", "Revenge", "Fear"], key="emotion")
+        notes = st.text_area("Notes", key="notes")
 
     submit = st.form_submit_button("Submit Trade")
 
     if submit:
         errors = []
 
-        if not time: errors.append("Time required")
-        if not asset: errors.append("Asset required")
-        if not direction: errors.append("Direction required")
-        if lots <= 0: errors.append("Lot size required")
-        if entry == 0: errors.append("Entry required")
-        if sl == 0: errors.append("SL required")
-        if tp == 0: errors.append("TP required")
-        if not result: errors.append("Result required")
+        if not time:
+            errors.append("Time required")
+        if not asset:
+            errors.append("Asset required")
+        if not direction:
+            errors.append("Direction required")
+        if lots <= 0:
+            errors.append("Lot size required")
+        if entry == 0:
+            errors.append("Entry required")
+        if sl == 0:
+            errors.append("SL required")
+        if tp == 0:
+            errors.append("TP required")
+        if not result:
+            errors.append("Result required")
 
         if errors:
             for e in errors:
@@ -145,7 +169,7 @@ with st.form("trade_form"):
 
                 new_row = pd.DataFrame([{
                     "Trade#": len(df) + 1,
-                    "Date": date,
+                    "Date": date_val,
                     "Time": time,
                     "Asset": asset,
                     "Direction": direction,
@@ -168,6 +192,8 @@ with st.form("trade_form"):
                 save_data(df)
 
                 st.success("Trade Added Successfully")
+
+                reset_form()
                 st.rerun()
 
             except Exception as e:
