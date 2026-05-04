@@ -8,7 +8,7 @@ DATA_FILE = "data.csv"
 ACCOUNTS_FILE = "accounts.csv"
 
 # ==============================
-# CONTRACT VALUES
+# CONTRACT VALUES (PER POINT)
 # ==============================
 CONTRACT_VALUES = {
     "MNQ": 2,
@@ -49,21 +49,20 @@ trade_columns = [
 
 df = load_csv(DATA_FILE, trade_columns)
 accounts_df = load_csv(ACCOUNTS_FILE, ["Account"])
-
 accounts = accounts_df["Account"].dropna().tolist()
 
 # ==============================
-# SIDEBAR - ACCOUNT MANAGEMENT (IMPROVED)
+# SIDEBAR - ACCOUNT MANAGEMENT (COMPACT)
 # ==============================
 st.sidebar.markdown("## 🏦 Accounts")
 
 with st.sidebar.expander("Manage Accounts", expanded=True):
 
-    # Add Account
+    # ➕ Add Account
     st.markdown("### ➕ Add Account")
     new_account = st.text_input("Account Name", key="add_acc")
 
-    if st.button("Add", use_container_width=True):
+    if st.button("Add Account", use_container_width=True):
         if new_account.strip():
             if new_account not in accounts:
                 accounts_df = pd.concat(
@@ -80,45 +79,46 @@ with st.sidebar.expander("Manage Accounts", expanded=True):
 
     st.divider()
 
-    # Rename Account
+    # ✏️ Rename + 🗑️ Delete (COMBINED)
     if accounts:
-        st.markdown("### ✏️ Rename Account")
-        selected_account = st.selectbox("Select Account", accounts, key="rename_select")
+        st.markdown("### ⚙️ Manage Account")
 
-        new_name = st.text_input("New Name", key="rename_input")
+        selected_account = st.selectbox("Select Account", accounts, key="manage_acc")
 
-        if st.button("Rename", use_container_width=True):
-            if new_name.strip():
-                if new_name not in accounts:
-                    accounts_df.loc[
-                        accounts_df["Account"] == selected_account, "Account"
-                    ] = new_name.strip()
+        col1, col2 = st.columns(2)
+
+        # Rename
+        with col1:
+            new_name = st.text_input("New Name", key="rename_input")
+
+            if st.button("Rename", use_container_width=True):
+                if new_name.strip():
+                    if new_name not in accounts:
+                        accounts_df.loc[
+                            accounts_df["Account"] == selected_account, "Account"
+                        ] = new_name.strip()
+                        save_csv(accounts_df, ACCOUNTS_FILE)
+                        st.success("Renamed")
+                        st.rerun()
+                    else:
+                        st.warning("Name exists")
+                else:
+                    st.error("Enter valid name")
+
+        # Delete
+        with col2:
+            confirm_delete = st.checkbox("Confirm Delete")
+
+            if st.button("Delete", use_container_width=True):
+                if confirm_delete:
+                    accounts_df = accounts_df[
+                        accounts_df["Account"] != selected_account
+                    ]
                     save_csv(accounts_df, ACCOUNTS_FILE)
-                    st.success("Renamed successfully")
+                    st.warning("Deleted")
                     st.rerun()
                 else:
-                    st.warning("Name already exists")
-            else:
-                st.error("Enter a valid name")
-
-        st.divider()
-
-        # Delete Account
-        st.markdown("### 🗑️ Delete Account")
-        delete_account = st.selectbox("Select to Delete", accounts, key="delete_select")
-
-        confirm_delete = st.checkbox("Confirm deletion")
-
-        if st.button("Delete", use_container_width=True):
-            if confirm_delete:
-                accounts_df = accounts_df[
-                    accounts_df["Account"] != delete_account
-                ]
-                save_csv(accounts_df, ACCOUNTS_FILE)
-                st.success("Deleted successfully")
-                st.rerun()
-            else:
-                st.error("Please confirm deletion")
+                    st.error("Confirm deletion first")
 
 # ==============================
 # MAIN APP
@@ -131,7 +131,7 @@ if st.button("➕ Add New Trade"):
     st.rerun()
 
 # ==============================
-# FORM
+# TRADE FORM
 # ==============================
 with st.form("trade_form"):
 
@@ -195,6 +195,7 @@ with st.form("trade_form"):
                 st.error(e)
         else:
             try:
+                # Calculations
                 risk = abs(entry - sl)
                 reward = abs(tp - entry)
                 rr = round(reward / risk, 2) if risk != 0 else 0
